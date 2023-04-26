@@ -9,6 +9,8 @@ from data.image_train_item import ImageCaption, ImageTrainItem
 from utils.fs_helpers import *
 from typing import Iterable
 
+from concurrent.futures import ThreadPoolExecutor
+
 from tqdm import tqdm
 
 DEFAULT_MAX_CAPTION_LENGTH = 2048
@@ -181,20 +183,33 @@ class Dataset:
 
     @classmethod
     def from_path(cls, data_root):
-        # Create a visitor that maintains global config stack 
+        # Create a visitor that maintains global config stack
         # and accumulates image configs as it traverses dataset
         image_configs = {}
-        def process_dir(files, parent_globals):
-            fileset = {os.path.basename(f): f for f in files}
-            global_cfg = parent_globals.merge(Dataset.__global_cfg(fileset))
-            local_cfg = Dataset.__local_cfg(fileset)
-            for img in filter(is_image, files):
-                img_cfg = Dataset.__sidecar_cfg(img, fileset)
-                resolved_cfg = ImageConfig.fold([global_cfg, local_cfg, img_cfg])
-                image_configs[img] = Dataset.__ensure_caption(resolved_cfg, img)
-            return global_cfg
+        try:
+            with open('/mnt/storage/training_configs/image_configs.pyc', 'rb') as f:
+                print('found image config, loading')
+                image_configs = pickle.load(f)
+        except Exception as e:
+            print('image config not found')
+            print(e)
 
-        walk_and_visit(data_root, process_dir, ImageConfig())
+            def process_dir(files, parent_globals):
+                fileset = {os.path.basename(f): f for f in files}
+                global_cfg = parent_globals.merge(Dataset.__global_cfg(fileset))
+                local_cfg = Dataset.__local_cfg(fileset)
+                for img in tqdm(list(filter(is_image, files)), position=1):
+                    img_cfg = Dataset.__sidecar_cfg(img, fileset)
+                    resolved_cfg = ImageConfig.fold([global_cfg, local_cfg, img_cfg])
+                    image_configs[img] = Dataset.__ensure_caption(resolved_cfg, img)
+                return global_cfg
+
+            print('walk and visit')
+            walk_and_visit(data_root, process_dir, ImageConfig(), pb=tqdm(total=737, position=0))
+
+            # with open('/mnt/storage/training_configs/image_configs.pyc', 'wb') as f:
+            #     pickle.dump(image_configs, f)
+
         return Dataset(image_configs)
 
     @classmethod
@@ -215,42 +230,60 @@ class Dataset:
     
     def image_train_items(self, aspects):
         items = []
-        for image in tqdm(self.image_configs, desc="preloading", dynamic_ncols=True):
-            config = self.image_configs[image]
+        try:
+            with open('/mnt/storage/training_configs/image_train_items.pyc', 'rb') as f:
+                print('found image config, loading')
+                items = pickle.load(f)
+        except Exception as e:
+            print('image train items not found')
+            print(e)
 
-            if len(config.main_prompts) > 1:
-                logging.warning(f" *** Found multiple multiple main_prompts for image {image}, but only one will be applied: {config.main_prompts}")
+            future_to_items = []
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                for image in tqdm(self.image_configs, desc="preloading", dynamic_ncols=True):
+                    config = self.image_configs[image]
 
-            if len(config.main_prompts) < 1:
-                logging.warning(f" *** No main_prompts for image {image}")
+                    if len(config.main_prompts) > 1:
+                        logging.warning(f" *** Found multiple multiple main_prompts for image {image}, but only one will be applied: {config.main_prompts}")
 
-            tags = []
-            tag_weights = []
-            for tag in sorted(config.tags, key=lambda x: x.weight or 1.0, reverse=True):
-                tags.append(tag.value)
-                tag_weights.append(tag.weight)
-            use_weights = len(set(tag_weights)) > 1 
+                    if len(config.main_prompts) < 1:
+                        logging.warning(f" *** No main_prompts for image {image}")
 
-            try:            
-                caption = ImageCaption(
-                    main_prompt=next(iter(config.main_prompts)),
-                    rating=config.rating or 1.0,
-                    tags=tags,
-                    tag_weights=tag_weights,
-                    max_target_length=config.max_caption_length or DEFAULT_MAX_CAPTION_LENGTH,
-                    use_weights=use_weights)
+                    tags = [] + config.tags
+                    tag_weights = [1.0] * len(config.tags)
+                    use_weights = False
+                    # for tag in sorted(config.tags, key=lambda x: x.weight or 1.0, reverse=True):
+                    #     tags.append(tag.value)
+                    #     tag_weights.append(tag.weight)
+                    # use_weights = len(set(tag_weights)) > 1
 
-                item = ImageTrainItem(
-                    image=None,
-                    caption=caption,
-                    aspects=aspects,
-                    pathname=os.path.abspath(image),
-                    flip_p=config.flip_p or 0.0,
-                    multiplier=config.multiply or 1.0,
-                    cond_dropout=config.cond_dropout
-                )
-                items.append(item)
-            except Exception as e:
-                logging.error(f" *** Error preloading image or caption for: {image}, error: {e}")
-                raise e
+                    try:
+                        caption = ImageCaption(
+                            main_prompt=next(iter(config.main_prompts)),
+                            rating=config.rating or 1.0,
+                            tags=tags,
+                            tag_weights=tag_weights,
+                            max_target_length=config.max_caption_length or DEFAULT_MAX_CAPTION_LENGTH,
+                            use_weights=use_weights)
+
+                        item = executor.submit(
+                            ImageTrainItem,
+                            image=None,
+                            caption=caption,
+                            aspects=aspects,
+                            pathname=os.path.abspath(image),
+                            flip_p=config.flip_p or 0.0,
+                            multiplier=config.multiply or 1.0,
+                            cond_dropout=config.cond_dropout
+                        )
+                        items.append(item)
+                    except Exception as e:
+                        logging.error(f" *** Error preloading image or caption for: {image}, error: {e}")
+                        raise e
+
+            items = [ concurrent.futures.as_completed(item) for item in future_to_items ]
+            
+            with open('/mnt/storage/training_configs/image_train_items.pyc', 'wb') as f:
+                pickle.dump(items, f)
+
         return items
