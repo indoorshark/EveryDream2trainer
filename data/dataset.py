@@ -10,6 +10,7 @@ from utils.fs_helpers import *
 from typing import Iterable
 
 from concurrent.futures import ThreadPoolExecutor
+import pickle
 
 from tqdm import tqdm
 
@@ -198,14 +199,14 @@ class Dataset:
                 fileset = {os.path.basename(f): f for f in files}
                 global_cfg = parent_globals.merge(Dataset.__global_cfg(fileset))
                 local_cfg = Dataset.__local_cfg(fileset)
-                for img in tqdm(list(filter(is_image, files)), position=1):
+                for img in list(filter(is_image, files)):
                     img_cfg = Dataset.__sidecar_cfg(img, fileset)
                     resolved_cfg = ImageConfig.fold([global_cfg, local_cfg, img_cfg])
                     image_configs[img] = Dataset.__ensure_caption(resolved_cfg, img)
                 return global_cfg
 
             print('walk and visit')
-            walk_and_visit(data_root, process_dir, ImageConfig(), pb=tqdm(total=737, position=0))
+            walk_and_visit(data_root, process_dir, ImageConfig())
 
             # with open('/mnt/storage/training_configs/image_configs.pyc', 'wb') as f:
             #     pickle.dump(image_configs, f)
@@ -249,7 +250,7 @@ class Dataset:
                     if len(config.main_prompts) < 1:
                         logging.warning(f" *** No main_prompts for image {image}")
 
-                    tags = [] + config.tags
+                    tags = config.tags
                     tag_weights = [1.0] * len(config.tags)
                     use_weights = False
                     # for tag in sorted(config.tags, key=lambda x: x.weight or 1.0, reverse=True):
