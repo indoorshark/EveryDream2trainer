@@ -745,6 +745,18 @@ def main(args):
 
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
 
+    _random = random.Random(555)
+    def pyramid_noise_like(x, discount=0.9):
+      b, c, w, h = x.shape
+      u = nn.Upsample(size=(w, h), mode='bilinear')
+      noise = torch.randn_like(x)
+      for i in range(10):
+        r = _random.random()*2+2 # Rather than always going 2x,
+        w, h = max(1, int(w/(r**i))), max(1, int(h/(r**i)))
+        noise += u(torch.randn(b, c, w, h).to(x)) * discount**i
+        if w==1 or h==1: break # Lowest resolution is 1x1
+      return noise/noise.std() # Scaled back to roughly unit variance
+
     # actual prediction function - shared between train and validate
     def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0):
         with torch.no_grad():
@@ -756,8 +768,9 @@ def main(args):
 
             if zero_frequency_noise_ratio > 0.0:
                 # see https://www.crosslabs.org//blog/diffusion-with-offset-noise
-                zero_frequency_noise = zero_frequency_noise_ratio * torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
-                noise = torch.randn_like(latents) + zero_frequency_noise
+                # zero_frequency_noise = zero_frequency_noise_ratio * torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
+                # noise = torch.randn_like(latents) + zero_frequency_noise
+                noise = pyramid_noise_like(latents, 0.6) * zero_frequency_noise_ratio
             else:
                 noise = torch.randn_like(latents)
 
