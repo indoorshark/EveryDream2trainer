@@ -328,6 +328,7 @@ def resolve_image_train_items(args: argparse.Namespace, log_folder: str) -> list
     logging.info(" Preloading images...")
 
     resolved_items = resolver.resolve(args.data_root, args)
+    resolved_items = [item for item in resolved_items if not item.is_undersized]
     report_image_train_item_problems(log_folder, resolved_items)
     image_paths = set(map(lambda item: item.pathname, resolved_items))
 
