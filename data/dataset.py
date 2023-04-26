@@ -240,7 +240,7 @@ class Dataset:
             print(e)
 
             future_to_items = []
-            with ThreadPoolExecutor(max_workers=4) as executor:
+            with ThreadPoolExecutor(max_workers=16) as executor:
                 for image in tqdm(self.image_configs, desc="preloading", dynamic_ncols=True):
                     config = self.image_configs[image]
 
@@ -277,13 +277,14 @@ class Dataset:
                             multiplier=config.multiply or 1.0,
                             cond_dropout=config.cond_dropout
                         )
-                        items.append(item)
+                        future_to_items.append(item)
                     except Exception as e:
                         logging.error(f" *** Error preloading image or caption for: {image}, error: {e}")
                         raise e
 
-            items = [ concurrent.futures.as_completed(item) for item in future_to_items ]
-            
+                for item in tqdm(concurrent.futures.as_completed(future_to_items), desc="preloading", dynamic_ncols=True):
+                    items.append(item.result())
+
             with open('/mnt/storage/training_configs/image_train_items.pyc', 'wb') as f:
                 pickle.dump(items, f)
 
