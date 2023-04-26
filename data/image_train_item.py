@@ -118,6 +118,12 @@ class ImageCaption:
         random.Random(seed).shuffle(tags)
         return ", ".join(tags)
 
+random_flip_cache = {}
+def RandomHorizontalFlip(p):
+    if p not in random_flip_cache:
+        random_flip_cache[p] = transforms.RandomHorizontalFlip(p=p)
+    return random_flip_cache[p]
+
 class ImageTrainItem:
     """
     image: PIL.Image
@@ -131,7 +137,7 @@ class ImageTrainItem:
         self.caption = caption
         self.aspects = aspects
         self.pathname = pathname
-        self.flip = transforms.RandomHorizontalFlip(p=flip_p)
+        self.flip = RandomHorizontalFlip(p=flip_p)
         self.cropped_img = None
         self.runt_size = 0
         self.multiplier = multiplier
