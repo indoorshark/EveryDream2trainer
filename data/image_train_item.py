@@ -164,11 +164,11 @@ class ImageTrainItem:
         return image
     
     def _try_transpose(self, image, print_error=False):
-        try:
-            image = ImageOps.exif_transpose(image)
-        except Exception as e:
-            logging.warning(F"Error rotating image: {e} on {self.pathname}, image will be loaded as is, EXIF may be corrupt") if print_error else None
-            pass
+        # try:
+        #     image = ImageOps.exif_transpose(image)
+        # except Exception as e:
+        #     logging.warning(F"Error rotating image: {e} on {self.pathname}, image will be loaded as is, EXIF may be corrupt") if print_error else None
+        #     pass
         return image
 
     def hydrate(self, crop=False, save=False, crop_jitter=20):
