@@ -40,6 +40,8 @@ def disable_multiplier_and_flip(items: list[ImageTrainItem]) -> Generator[ImageT
             with open('/mnt/storage/training_configs/disable_multipler_and_flip_image_configs.pickle', 'rb') as f:
                 print('found image config, loading')
                 disable_multiplier_and_flip_cache = pickle.load(f)
+        except:
+            pass
 
     for i in tqdm(items, desc="Loading validation images"):
         if i.pathname not in disable_multiplier_and_flip_cache:
