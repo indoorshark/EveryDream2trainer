@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
+import pickle
 
 from data.every_dream import build_torch_dataloader, EveryDreamBatch
 from data.data_loader import DataLoaderMultiAspect
@@ -31,9 +32,29 @@ def get_random_split(items: list[ImageTrainItem], split_proportion: float, batch
     remaining_items = list(items_copy[split_item_count:])
     return split_items, remaining_items
 
+disable_multiplier_and_flip_cache = {}
+
 def disable_multiplier_and_flip(items: list[ImageTrainItem]) -> Generator[ImageTrainItem, None, None]:
-    for i in items:
-        yield ImageTrainItem(image=i.image, caption=i.caption, aspects=i.aspects, pathname=i.pathname, flip_p=0, multiplier=1)
+    if not disable_multiplier_and_flip_cache:
+        try:
+            with open('/mnt/storage/training_configs/disable_multipler_and_flip_image_configs.pickle', 'rb') as f:
+                print('found image config, loading')
+                disable_multiplier_and_flip_cache = pickle.load(f)
+
+    for i in tqdm(items, desc="Loading validation images"):
+        if i.pathname not in disable_multiplier_and_flip_cache:
+            disable_multiplier_and_flip_cache[i.pathname] = ImageTrainItem(
+                image=i.image,
+                caption=i.caption,
+                aspects=i.aspects,
+                pathname=i.pathname,
+                flip_p=0,
+                multiplier=1
+            )
+        yield disable_multiplier_and_flip_cache[i.pathname]
+
+    with open('/mnt/storage/training_configs/disable_multipler_and_flip_image_configs.pickle', 'wb') as f:
+        pickle.dump(disable_multiplier_and_flip_cache, f)
 
 class EveryDreamValidator:
     def __init__(self,
