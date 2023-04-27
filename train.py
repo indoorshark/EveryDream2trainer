@@ -754,7 +754,7 @@ def main(args):
 
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
 
-    _random = random.Random(555)
+    _random = random.Random(seed)
     def pyramid_noise_like(x, discount=0.9):
       b, c, w, h = x.shape
       u = nn.Upsample(size=(w, h), mode='bilinear')
