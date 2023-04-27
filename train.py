@@ -617,11 +617,15 @@ def main(args):
         # the validation dataset may need to steal some items from image_train_items
         image_train_items = validator.prepare_validation_splits(image_train_items, tokenizer=tokenizer)
 
+    print("validator loaded")
+
     data_loader = DataLoaderMultiAspect(
         image_train_items=image_train_items,
         seed=seed,
         batch_size=args.batch_size,
     )
+
+    print("data loader created")
 
     train_batch = EveryDreamBatch(
         data_loader=data_loader,
@@ -633,6 +637,8 @@ def main(args):
         rated_dataset=args.rated_dataset,
         rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0))
     )
+
+    print("train batch created")
 
     torch.cuda.benchmark = False
 
@@ -649,6 +655,8 @@ def main(args):
         num_warmup_steps=lr_warmup_steps,
         num_training_steps=args.lr_decay_steps,
     )
+
+    print("scheduler created")
 
     log_args(log_writer, args)
 
