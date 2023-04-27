@@ -35,6 +35,7 @@ def get_random_split(items: list[ImageTrainItem], split_proportion: float, batch
 disable_multiplier_and_flip_cache = {}
 
 def disable_multiplier_and_flip(items: list[ImageTrainItem]) -> Generator[ImageTrainItem, None, None]:
+    global disable_multiplier_and_flip_cache
     if not disable_multiplier_and_flip_cache:
         try:
             with open('/mnt/storage/training_configs/disable_multipler_and_flip_image_configs.pickle', 'rb') as f:
